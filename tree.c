@@ -137,13 +137,15 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
 
 // Load the index and delegate to recursive helper
 int tree_from_index(ObjectID *id_out) {
-    extern int index_load(Index *index);
+     
     
     // Step 1: Load the index from disk
     Index index;
     if (index_load(&index) != 0) {
-        fprintf(stderr, "error: failed to load index\n");
-        return -1;
+        if (index.count == 0) {
+         fprintf(stderr, "error: index is empty\n");
+            return -1;
+}
     }
 
     // Step 2: Build tree starting at root level (empty prefix)
@@ -191,7 +193,7 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
             // Extract the directory name (part before the slash)
             size_t dir_name_len = slash - rel_path;
             char dir_name[256];
-            strncpy(dir_name, rel_path, dir_name_len);
+            memcpy(dir_name, rel_path, dir_name_len);
             dir_name[dir_name_len] = '\0';
             
             // Build the new prefix for the subdirectory
@@ -199,18 +201,11 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
             snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, dir_name);
             
             // Count how many entries belong to this subdirectory
-            int subdir_count = 0;
-            int j = i;
             size_t new_prefix_len = strlen(new_prefix);
-            while (j < count) {
-                if (strncmp(entries[j].path, new_prefix, new_prefix_len) == 0) {
-                    subdir_count++;
-                    j++;
-                } else {
-                    break;
-                }
+            while (i < count && strncmp(entries[i].path, new_prefix, new_prefix_len) == 0) {
+                i++;
             }
-            
+                        
             // Recursively build tree for this subdirectory
             ObjectID subtree_id = {0};
             if (write_tree_level(entries, count, new_prefix, &subtree_id) != 0) {
@@ -219,18 +214,29 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
             
             // Add directory entry to current tree
             TreeEntry *entry = &tree.entries[tree.count];
-            entry->mode = 0040000;  // Mode for directory
+            entry->mode = MODE_DIR;  // Mode for directory
             entry->hash = subtree_id;
             snprintf(entry->name, sizeof(entry->name), "%s", dir_name);
             entry->name[sizeof(entry->name) - 1] = '\0';
             tree.count++;
             
             // Skip past all entries in this subdirectory
-            i = j;
+            
         }
     }
     
-    // Placeholder - will serialize and write tree in next commit
-    (void)id_out;
-    return -1;
+    // Step 5: Serialize the tree to binary format
+    void *tree_data;
+    size_t tree_len;
+    if (tree_serialize(&tree, &tree_data, &tree_len) != 0) {
+        return -1;
+    }
+    
+    // Step 6: Write the tree object to the object store
+    // (Note: object_write() will be implemented in Phase 1 - already done)
+    extern int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+    int rc = object_write(OBJ_TREE, tree_data, tree_len, id_out);
+    free(tree_data);
+    
+    return rc;
 }
