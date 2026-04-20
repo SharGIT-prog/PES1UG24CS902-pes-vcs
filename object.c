@@ -122,12 +122,6 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     compute_hash(full_object, full_len, id_out);
 
     // (Remaining steps will be added in next commits)
-    if (object_exists(id_out)) {
-        free(full_object);
-        return 0;  // Object already stored, no need to write again
-    }
-
-    // (Directory and file operations will be added in next commits)
     free(full_object);
     return 0;
 }
