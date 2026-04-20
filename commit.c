@@ -227,7 +227,22 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     strncpy(commit.message, message, sizeof(commit.message) - 1);
     commit.message[sizeof(commit.message) - 1] = '\0';
     
-    // (Serialization will be in next commit)
-    (void)commit_id_out;
+    // Step 7: Serialize commit to text format
+    extern int commit_serialize(const Commit *commit, void **data_out, size_t *len_out);
+    void *commit_data;
+    size_t commit_len;
+    if (commit_serialize(&commit, &commit_data, &commit_len) != 0) {
+        return -1;
+    }
+    
+    // Step 8: Write commit object to object store
+    if (object_write(OBJ_COMMIT, commit_data, commit_len, commit_id_out) != 0) {
+        free(commit_data);
+        return -1;
+    }
+    
+    free(commit_data);
+    
+    // (HEAD update will be in next commit)
     return -1;
 }
