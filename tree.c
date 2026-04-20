@@ -135,6 +135,7 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 // Forward declaration for helper function
 static int write_tree_level(IndexEntry *entries, int count, const char *prefix, ObjectID *id_out);
 
+
 // Load the index and delegate to recursive helper
 int tree_from_index(ObjectID *id_out) {
      
