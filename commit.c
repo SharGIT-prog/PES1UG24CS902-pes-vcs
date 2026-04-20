@@ -33,14 +33,15 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
 
 // Parse raw commit data into a Commit struct.
 int commit_parse(const void *data, size_t len, Commit *commit_out) {
-    (void)len;
     const char *p = (const char *)data;
+    const char *end = p + len;
     char hex[HASH_HEX_SIZE + 1];
 
     // "tree <hex>\n"
     if (sscanf(p, "tree %64s\n", hex) != 1) return -1;
     if (hex_to_hash(hex, &commit_out->tree) != 0) return -1;
     p = strchr(p, '\n') + 1;
+    if (p >= end) return -1;
 
     // optional "parent <hex>\n"
     if (strncmp(p, "parent ", 7) == 0) {
@@ -51,6 +52,7 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
     } else {
         commit_out->has_parent = 0;
     }
+    if (p >= end) return -1;
 
     // "author <name> <timestamp>\n"
     char author_buf[256];
@@ -64,10 +66,21 @@ int commit_parse(const void *data, size_t len, Commit *commit_out) {
     snprintf(commit_out->author, sizeof(commit_out->author), "%s", author_buf);
     commit_out->timestamp = ts;
     p = strchr(p, '\n') + 1;  // skip author line
+    if (p >= end) return -1;
     p = strchr(p, '\n') + 1;  // skip committer line
+    if (p >= end) return -1;
     p = strchr(p, '\n') + 1;  // skip blank line
+    if (p >= end) return -1;
 
-    snprintf(commit_out->message, sizeof(commit_out->message), "%s", p);
+    // Message is the rest of the data, not null-terminated
+    // Copy only what remains, up to the end of the data
+    size_t msg_len = end - p;
+    if (msg_len >= sizeof(commit_out->message)) {
+        msg_len = sizeof(commit_out->message) - 1;
+    }
+    memcpy(commit_out->message, p, msg_len);
+    commit_out->message[msg_len] = '\0';
+    
     return 0;
 }
 
@@ -243,6 +256,12 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     
     free(commit_data);
     
-    // (HEAD update will be in next commit)
-    return -1;
+    // Step 9: Update HEAD reference to point to new commit
+    extern int head_update(const ObjectID *new_commit);
+    if (head_update(commit_id_out) != 0) {
+        fprintf(stderr, "error: failed to update HEAD\n");
+        return -1;
+    }
+    
+    return 0;  
 }
