@@ -121,7 +121,13 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     // Step 5: Compute SHA-256 hash of the full object
     compute_hash(full_object, full_len, id_out);
 
-    // (Remaining steps will be added in next commits)
+    // Step 6: Check if object already exists (deduplication)
+    if (object_exists(id_out)) {
+        free(full_object);
+        return 0;  // Object already stored, no need to write again
+    }
+
+    // (Directory and file operations will be added in next commits)
     free(full_object);
     return 0;
 }
