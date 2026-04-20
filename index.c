@@ -312,7 +312,28 @@ int index_add(Index *index, const char *path) {
         mode = 0100755;  // Executable file
     }
     
-    // (Index entry update will be in next commit)
-    (void)mode; (void)blob_id;
-    return -1;
+    // Step 8: Find or create index entry for this path
+    IndexEntry *entry = index_find(index, path);
+    
+    if (!entry) {
+        // New file - add to index
+        if (index->count >= MAX_INDEX_ENTRIES) {
+            fprintf(stderr, "error: index is full\n");
+            return -1;
+        }
+        entry = &index->entries[index->count];
+        index->count++;
+        // Use bounded copy to prevent buffer overflow
+        strncpy(entry->path, path, sizeof(entry->path) - 1);
+        entry->path[sizeof(entry->path) - 1] = '\0';
+    }
+    
+    // Step 9: Update entry with new values
+    entry->hash = blob_id;
+    entry->mode = mode;
+    entry->mtime_sec = st.st_mtime;
+    entry->size = st.st_size;
+    
+    // Step 10: Save index to disk
+    return index_save(index);
 }
