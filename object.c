@@ -127,11 +127,39 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return 0;  // Object already stored, no need to write again
     }
 
-    // (Directory and file operations will be added in next commits)
+    // Step 7: Get the file path where object should be stored
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+
+    // Step 8: Create shard directory if it doesn't exist
+    char shard_dir[512];
+    snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, path + strlen(OBJECTS_DIR) + 1);
+    mkdir(shard_dir, 0755);  // Creates .pes/objects/XX/
+
+    // Step 9: Create temporary file path
+    char temp_path[528];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
+
+    // Step 10: Open temp file for atomic write
+    int fd = open(temp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full_object);
+        return -1;
+    }
+
+    // Step 11: Write full object to temp file
+    if (write(fd, full_object, full_len) != (ssize_t)full_len) {
+        close(fd);
+        unlink(temp_path);
+        free(full_object);
+        return -1;
+    }
+
+    // (fsync and rename will be added in next commit)
+    close(fd);
     free(full_object);
     return 0;
 }
-
 // Read an object from the store.
 //
 // Steps:
