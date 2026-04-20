@@ -206,8 +206,103 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 //
 // The caller is responsible for calling free(*data_out).
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
+
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
-    // TODO: Implement
-    (void)id; (void)type_out; (void)data_out; (void)len_out;
-    return -1;
+    // Step 1: Get the file path from the hash
+    char path[512];
+    object_path(id, path, sizeof(path));
+
+    // Step 2: Open and read the entire file
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;  // File not found
+
+    // Step 3: Get file size
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    // Step 4: Read entire file into memory
+    void *file_contents = malloc(file_size);
+    if (!file_contents) {
+        fclose(f);
+        return -1;
+    }
+
+    size_t read_bytes = fread(file_contents, 1, file_size, f);
+    fclose(f);
+
+    if (read_bytes != (size_t)file_size) {
+        free(file_contents);
+        return -1;
+    }
+
+    // Step 5: Find the null terminator separating header from data
+    const uint8_t *null_byte = memchr(file_contents, '\0', file_size);
+    if (!null_byte) {
+        free(file_contents);
+        return -1;
+    }
+
+    size_t header_len = (const uint8_t *)null_byte - (const uint8_t *)file_contents;
+    char header[256];
+    if (header_len >= sizeof(header)) {
+        free(file_contents);
+        return -1;
+    }
+    memcpy(header, file_contents, header_len);
+    header[header_len] = '\0';
+
+    // Step 6: Parse header to extract type and size
+    char type_str[32];
+    size_t size;
+    if (sscanf(header, "%31s %zu", type_str, &size) != 2) {
+        free(file_contents);
+        return -1;
+    }
+
+    // Step 7: Convert type string to ObjectType enum
+    ObjectType type;
+    if (strcmp(type_str, "blob") == 0) {
+        type = OBJ_BLOB;
+    } else if (strcmp(type_str, "tree") == 0) {
+        type = OBJ_TREE;
+    } else if (strcmp(type_str, "commit") == 0) {
+        type = OBJ_COMMIT;
+    } else {
+        free(file_contents);
+        return -1;
+    }
+
+    // Step 8: Verify data size matches header
+    size_t data_start = header_len + 1;
+    if (data_start + size != (size_t)file_size) {
+        free(file_contents);
+        return -1;
+    }
+
+    // Step 9: Verify integrity by recomputing SHA-256
+    ObjectID computed_id;
+    compute_hash(file_contents, file_size, &computed_id);
+
+    if (memcmp(&computed_id, id, sizeof(ObjectID)) != 0) {
+        free(file_contents);
+        return -1;  
+    }
+
+    // Step 10: Allocate and return data portion
+    void *data = malloc(size);
+    if (!data) {
+        free(file_contents);
+        return -1;
+    }
+
+    memcpy(data, (uint8_t *)file_contents + data_start, size);
+    free(file_contents);
+
+    // Step 11: Set output parameters
+    *type_out = type;
+    *data_out = data;
+    *len_out = size;
+
+    return 0;   
 }
