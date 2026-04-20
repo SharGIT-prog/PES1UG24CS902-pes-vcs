@@ -202,7 +202,19 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
     
-    // (Parent and author setup will be in next commits)
+    Commit commit;
+    commit.tree = tree_id;
+    commit.has_parent = 0;
+    
+    // Step 3: Try to read current HEAD as parent
+    extern int head_read(ObjectID *id_out);
+    if (head_read(&commit.parent) == 0) {
+        // HEAD exists, use it as parent
+        commit.has_parent = 1;
+    }
+    // If head_read fails, this is the first commit (no parent)
+    
+    // (Author and timestamp will be in next commit)
     (void)message; (void)commit_id_out;
     return -1;
 }
