@@ -152,7 +152,47 @@ int tree_from_index(ObjectID *id_out) {
 
 // Helper function for recursive tree building (incomplete - will finish in next commit)
 static int write_tree_level(IndexEntry *entries, int count, const char *prefix, ObjectID *id_out) {
-    // Placeholder - will implement in next commit
-    (void)entries; (void)count; (void)prefix; (void)id_out;
+    // Initialize tree at this level
+    Tree tree;
+    tree.count = 0;
+    
+    // Step 1: Get prefix length for relative path calculation
+    size_t prefix_len = strlen(prefix);
+    int i = 0;
+    
+    // Step 2: Iterate through entries looking for entries that start with this prefix
+    while (i < count && tree.count < MAX_TREE_ENTRIES) {
+        const char *path = entries[i].path;
+        
+        // Skip entries that don't start with our prefix
+        if (strncmp(path, prefix, prefix_len) != 0) {
+            i++;
+            continue;
+        }
+        
+        // Step 3: Get the relative path after the prefix
+        const char *rel_path = path + prefix_len;
+        
+        // Step 4: Check if this is a file at this level or in a subdirectory
+        const char *slash = strchr(rel_path, '/');
+        
+        if (!slash) {
+            // This is a FILE at this level (no '/' found)
+            // Add it directly to the tree
+            TreeEntry *entry = &tree.entries[tree.count];
+            entry->mode = entries[i].mode;
+            entry->hash = entries[i].hash;
+            strncpy(entry->name, rel_path, sizeof(entry->name) - 1);
+            entry->name[sizeof(entry->name) - 1] = '\0';
+            tree.count++;
+            i++;
+        } else {
+            // This is a SUBDIRECTORY - will handle in next commit
+            i++;
+        }
+    }
+    
+    // Placeholder - will serialize and write tree in next commit
+    (void)id_out;
     return -1;
 }
