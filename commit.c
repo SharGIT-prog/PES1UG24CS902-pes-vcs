@@ -214,7 +214,20 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     }
     // If head_read fails, this is the first commit (no parent)
     
-    // (Author and timestamp will be in next commit)
-    (void)message; (void)commit_id_out;
+    // Step 4: Get author from environment variable
+    extern const char* pes_author(void);
+    const char *author_str = pes_author();
+    strncpy(commit.author, author_str, sizeof(commit.author) - 1);
+    commit.author[sizeof(commit.author) - 1] = '\0';
+    
+    // Step 5: Get current timestamp
+    commit.timestamp = (uint64_t)time(NULL);
+    
+    // Step 6: Store commit message
+    strncpy(commit.message, message, sizeof(commit.message) - 1);
+    commit.message[sizeof(commit.message) - 1] = '\0';
+    
+    // (Serialization will be in next commit)
+    (void)commit_id_out;
     return -1;
 }
