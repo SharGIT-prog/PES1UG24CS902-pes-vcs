@@ -155,11 +155,35 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return -1;
     }
 
-    // (fsync and rename will be added in next commit)
+    // Step 12: Fsync temp file to ensure data reaches disk
+    if (fsync(fd) != 0) {
+        close(fd);
+        unlink(temp_path);
+        free(full_object);
+        return -1;
+    }
+
     close(fd);
+
+    // Step 13: Atomically rename temp file to final location
+    if (rename(temp_path, path) != 0) {
+        unlink(temp_path);
+        free(full_object);
+        return -1;
+    }
+
+    // Step 14: Fsync the shard directory to persist the rename
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
     free(full_object);
-    return 0;
+    return 0;  // Success!
 }
+
+
 // Read an object from the store.
 //
 // Steps:
