@@ -187,8 +187,46 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
             tree.count++;
             i++;
         } else {
-            // This is a SUBDIRECTORY - will handle in next commit
-            i++;
+            // This is a SUBDIRECTORY
+            // Extract the directory name (part before the slash)
+            size_t dir_name_len = slash - rel_path;
+            char dir_name[256];
+            strncpy(dir_name, rel_path, dir_name_len);
+            dir_name[dir_name_len] = '\0';
+            
+            // Build the new prefix for the subdirectory
+            char new_prefix[512];
+            snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, dir_name);
+            
+            // Count how many entries belong to this subdirectory
+            int subdir_count = 0;
+            int j = i;
+            size_t new_prefix_len = strlen(new_prefix);
+            while (j < count) {
+                if (strncmp(entries[j].path, new_prefix, new_prefix_len) == 0) {
+                    subdir_count++;
+                    j++;
+                } else {
+                    break;
+                }
+            }
+            
+            // Recursively build tree for this subdirectory
+            ObjectID subtree_id = {0};
+            if (write_tree_level(entries, count, new_prefix, &subtree_id) != 0) {
+                return -1;
+            }
+            
+            // Add directory entry to current tree
+            TreeEntry *entry = &tree.entries[tree.count];
+            entry->mode = 0040000;  // Mode for directory
+            entry->hash = subtree_id;
+            snprintf(entry->name, sizeof(entry->name), "%s", dir_name);
+            entry->name[sizeof(entry->name) - 1] = '\0';
+            tree.count++;
+            
+            // Skip past all entries in this subdirectory
+            i = j;
         }
     }
     
