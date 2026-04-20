@@ -264,8 +264,35 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
-    return -1;
+    // Step 1: Open the file for reading
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "error: could not open '%s'\n", path);
+        return -1;
+    }
+    
+    // Step 2: Get file size
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    // Step 3: Allocate buffer for file contents
+    void *data = malloc(file_size);
+    if (!data) {
+        fclose(f);
+        return -1;
+    }
+    
+    // Step 4: Read entire file into buffer
+    size_t read_bytes = fread(data, 1, file_size, f);
+    fclose(f);
+    
+    if (read_bytes != (size_t)file_size) {
+        free(data);
+        return -1;
+    }
+    
+    // (Will store blob in next commit)
+    free(data);
+    return -1;  // Incomplete - will implement blob write in next commit
 }
