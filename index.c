@@ -193,11 +193,65 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
+// Helper function for qsort to sort index entries by path
+static int compare_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
+}
+
+// Save the index to .pes/index atomically
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    // Step 1: Create a mutable copy to sort
+    Index sorted = *index;
+    
+    // Step 2: Sort entries by path (deterministic order)
+    qsort(sorted.entries, sorted.count, sizeof(IndexEntry), compare_entries);
+    
+    // Step 3: Open temporary file for writing
+    FILE *f = fopen(INDEX_FILE ".tmp", "w");
+    if (!f) return -1;
+    
+    // Step 4: Write each entry to temporary file
+    for (int i = 0; i < sorted.count; i++) {
+        const IndexEntry *entry = &sorted.entries[i];
+        char hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&entry->hash, hex);
+        
+        // Format: <mode-octal> <hex> <mtime> <size> <path>
+        int rc = fprintf(f, "%o %s %lu %u %s\n",
+                        entry->mode, hex,
+                        (unsigned long)entry->mtime_sec,
+                        entry->size, entry->path);
+        
+        if (rc < 0) {
+            fclose(f);
+            unlink(INDEX_FILE ".tmp");
+            return -1;
+        }
+    }
+    
+    // Step 5: Flush to userspace buffer
+    if (fflush(f) != 0) {
+        fclose(f);
+        unlink(INDEX_FILE ".tmp");
+        return -1;
+    }
+    
+    // Step 6: Sync to disk
+    if (fsync(fileno(f)) != 0) {
+        fclose(f);
+        unlink(INDEX_FILE ".tmp");
+        return -1;
+    }
+    
+    fclose(f);
+    
+    // Step 7: Atomically move temp file to final location
+    if (rename(INDEX_FILE ".tmp", INDEX_FILE) != 0) {
+        unlink(INDEX_FILE ".tmp");
+        return -1;
+    }
+    
+    return 0;
 }
 
 // Stage a file for the next commit.
