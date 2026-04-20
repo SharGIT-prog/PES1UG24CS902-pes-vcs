@@ -138,19 +138,29 @@ static int write_tree_level(IndexEntry *entries, int count, const char *prefix, 
 
 // Load the index and delegate to recursive helper
 int tree_from_index(ObjectID *id_out) {
-     
+    // Step 1: Load the index from disk (allocate on heap to avoid stack overflow)
+    Index *index = malloc(sizeof(Index));
+    if (!index) {
+        fprintf(stderr, "error: out of memory\n");
+        return -1;
+    }
     
-    // Step 1: Load the index from disk
-    Index index;
-    if (index_load(&index) != 0) {
-        if (index.count == 0) {
-         fprintf(stderr, "error: index is empty\n");
-            return -1;
-}
+    if (index_load(index) != 0) {
+        free(index);
+        fprintf(stderr, "error: failed to load index\n");
+        return -1;
+    }
+    
+    if (index->count == 0) {
+        free(index);
+        fprintf(stderr, "error: index is empty\n");
+        return -1;
     }
 
     // Step 2: Build tree starting at root level (empty prefix)
-    return write_tree_level(index.entries, index.count, "", id_out);
+    int rc = write_tree_level(index->entries, index->count, "", id_out);
+    free(index);
+    return rc;
 }
 
 // Helper function for recursive tree building (incomplete - will finish in next commit)
