@@ -291,8 +291,28 @@ int index_add(Index *index, const char *path) {
         free(data);
         return -1;
     }
-    
-    // (Will store blob in next commit)
+    // Step 5: Write file contents as blob object to store
+    extern int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+    ObjectID blob_id;
+    if (object_write(OBJ_BLOB, data, file_size, &blob_id) != 0) {
+        free(data);
+        return -1;
+    }
     free(data);
-    return -1;  // Incomplete - will implement blob write in next commit
+    
+    // Step 6: Get file metadata (for index entry)
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+    
+    // Step 7: Determine file mode (executable or regular)
+    uint32_t mode = 0100644;  // Regular file
+    if (st.st_mode & 0111) {
+        mode = 0100755;  // Executable file
+    }
+    
+    // (Index entry update will be in next commit)
+    (void)mode; (void)blob_id;
+    return -1;
 }
